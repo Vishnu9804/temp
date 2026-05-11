@@ -1,9 +1,9 @@
 import os
 import chromadb
-from llama_index.core import VectorStoreIndex, Settings # <-- Added Settings here
+from llama_index.core import VectorStoreIndex, Settings 
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.openai import OpenAI # <-- The Writer
+from llama_index.llms.openai import OpenAI # We still use the OpenAI class!
 from llama_index.postprocessor.cohere_rerank import CohereRerank
 from llama_index.core.postprocessor import MetadataReplacementPostProcessor
 from app.services.rag_interface import RAGServiceInterface
@@ -12,14 +12,21 @@ from app.core.config import settings
 
 class AdvancedRAGService(RAGServiceInterface):
     def __init__(self):
-        # Pass the OpenAI key to the environment so LlamaIndex can find it
+        # Pass the GitHub PAT (stored in OPENAI_API_KEY) to the environment
         os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
         
-        # --- NEW: Set up the Global Settings ---
-        # 1. The Translator
+        # --- 1. The Translator ---
         Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
-        # 2. The Writer (The Brain that drafts the final answer)
-        Settings.llm = OpenAI(model="gpt-3.5-turbo", temperature=0.1)
+        
+        # --- 2. The Writer (Updated for GitHub Models) ---
+        # We explicitly tell LlamaIndex to send the request to Azure/GitHub 
+        # instead of the default OpenAI servers.
+        Settings.llm = OpenAI(
+            model="gpt-4o-mini", 
+            temperature=0.1,
+            api_base="https://models.inference.ai.azure.com", # The GitHub Models endpoint
+            api_key=settings.OPENAI_API_KEY # Your github_pat_...
+        )
         
         # --- Connect to Vault ---
         db = chromadb.PersistentClient(path="./storage/chroma_db")
@@ -48,10 +55,8 @@ class AdvancedRAGService(RAGServiceInterface):
         )
 
     def answer_question(self, query: str) -> QueryResponse:
-        # Run the massive 2-stage pipeline
         response = self.query_engine.query(query)
         
-        # Extract citations
         citations = []
         for node in response.source_nodes:
             file_name = node.metadata.get('file_name', 'Unknown Document')
