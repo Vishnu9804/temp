@@ -6,4 +6,8 @@ class QueryRequest(BaseModel):
     
 class QueryResponse(BaseModel):
     answer: str
-    citations: List[str] 
+    citations: List[str]
+
+class IngestionResponse(BaseModel):
+    status: str
+    nodes_processed: int
